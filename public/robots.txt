@@ -1,0 +1,10 @@
+# robots.txt
+User-agent: *
+Allow: /
+
+# Özel alanlar
+Disallow: /admin/
+Disallow: /hesabim/
+
+# Sitemap
+Sitemap: https://techrehberi.com/sitemap.xml
