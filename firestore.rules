@@ -1,19 +1,154 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 4, 16);
+    // Temel fonksiyonlar
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isContributor() {
+      return isAuthenticated() && 
+        ('contributor' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles || 
+         'admin' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles);
+    }
+    
+    // Verilerin geçerli yapıda olduğunu doğrulama
+    function isValidPostData(data) {
+      return data.size() <= 15 && // Alan sayısını 15'e çıkarttık (yeni alanlar için)
+             'title' in data && data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             'content' in data && data.content is string && data.content.size() > 0 && 
+             'authorId' in data && data.authorId is string &&
+             'createdAt' in data && data.createdAt is timestamp;
+    }
+    
+    // Kullanıcı profil verilerinin geçerli olup olmadığını kontrol eden fonksiyon
+    function isValidUserProfileData(data) {
+      return (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
+             (!('website' in data) || (data.website is string && data.website.size() <= 200)) &&
+             (!('preferences' in data) || data.preferences is map);
+    }
+    
+    // Yorum içeriğinin geçerli olup olmadığını kontrol eden fonksiyon
+    function isValidCommentData(data) {
+      return 'content' in data && data.content is string && 
+             data.content.size() > 0 && data.content.size() <= 1000 &&
+             'userId' in data && data.userId is string &&
+             'postId' in data && data.postId is string;
+    }
+    
+    // Kullanıcılar koleksiyonu
+    match /users/{userId} {
+      // Kullanıcılar kendi profillerini okuyabilir/güncelleyebilir, adminler tüm profilleri yönetebilir
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUserProfileData(request.resource.data);
+      allow delete: if isAdmin();
+      
+      // Kullanıcının favori gönderileri
+      match /favorites/{postId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+    
+    // Blog yazıları koleksiyonu
+    match /posts/{postId} {
+      // Herkes yayınlanan gönderileri okuyabilir
+      allow read: if resource.data.status == 'published' || isAdmin() || isOwner(resource.data.authorId);
+      
+      // Yalnızca admin ve içerik üreticileri yeni gönderi oluşturabilir
+      allow create: if isContributor() && isValidPostData(request.resource.data) && 
+                      request.resource.data.authorId == request.auth.uid;
+      
+      // Yazarlar kendi gönderilerini güncelleyebilir, adminler tüm gönderileri güncelleyebilir
+      allow update: if (isOwner(resource.data.authorId) || isAdmin()) && 
+                      isValidPostData(request.resource.data);
+      
+      // Yalnızca adminler gönderi silebilir
+      allow delete: if isAdmin();
+      
+      // Post yorumları (alt koleksiyon olarak)
+      match /comments/{commentId} {
+        allow read: if resource.parent.data.status == 'published';
+        
+        // Kimlik doğrulaması yapılmış her kullanıcı yorum yapabilir
+        allow create: if isAuthenticated() && 
+                        request.resource.data.authorId == request.auth.uid &&
+                        request.resource.data.content is string &&
+                        request.resource.data.content.size() > 0 &&
+                        request.resource.data.content.size() <= 1000;
+        
+        // Kullanıcılar kendi yorumlarını düzenleyebilir
+        allow update: if isOwner(resource.data.authorId) &&
+                        request.resource.data.content is string &&
+                        request.resource.data.content.size() > 0 &&
+                        request.resource.data.content.size() <= 1000;
+        
+        // Kullanıcılar kendi yorumlarını silebilir, adminler herhangi bir yorumu silebilir
+        allow delete: if isOwner(resource.data.authorId) || isAdmin();
+      }
+    }
+    
+    // Yeni yorum sistemi (üst seviye koleksiyon olarak)
+    match /comments/{commentId} {
+      // Herkes yorumları okuyabilir
+      allow read;
+      
+      // Kimlik doğrulaması yapılmış kullanıcılar yorum ekleyebilir
+      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      isValidCommentData(request.resource.data);
+      
+      // Kullanıcılar kendi yorumlarını düzenleyebilir
+      allow update: if (isOwner(resource.data.userId) || isAdmin()) && 
+                      (request.resource.data.content is string &&
+                       request.resource.data.content.size() > 0 && 
+                       request.resource.data.content.size() <= 1000);
+      
+      // Kullanıcılar kendi yorumlarını silebilir, adminler herhangi bir yorumu silebilir
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+    
+    // Kullanıcı tercihleri ve etkileşimleri için kurallar (bookmarks, likes, vb.)
+    match /user-interactions/{interactionId} {
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      
+      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.type in ['bookmark', 'like'] &&
+                      request.resource.data.postId is string;
+      
+      allow delete: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+    }
+    
+    // Kategoriler - Yalnızca adminler yönetebilir, herkes okuyabilir
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Etiketler - Yalnızca adminler yönetebilir, herkes okuyabilir
+    match /tags/{tagId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Site ayarları - Yalnızca adminler yönetebilir, herkes okuyabilir
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

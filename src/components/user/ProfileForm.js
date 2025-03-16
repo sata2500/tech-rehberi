@@ -114,7 +114,7 @@ export default function ProfileForm({ user, onSuccess }) {
       setPreferences(prev => ({
         ...prev,
         emailNotifications: {
-          ...prev.emailNotifications,
+          ...(prev.emailNotifications || {}),
           [notificationType]: checked
         }
       }));
@@ -709,40 +709,40 @@ export default function ProfileForm({ user, onSuccess }) {
               <h4 className="text-lg font-medium text-gray-900 mb-3">E-posta Bildirimleri</h4>
               
               <div className="space-y-3">
-                <label className="flex items-center">
+              <label className="flex items-center">
                   <input
                     type="checkbox"
                     name="email_newPosts"
-                    checked={preferences.emailNotifications.newPosts}
+                    checked={preferences.emailNotifications?.newPosts ?? true}
                     onChange={handlePreferenceChange}
                     disabled={!isEditing || isLoading}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Yeni yazılar hakkında bildir</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Yeni yazılar hakkında bildir</span>
                 </label>
-                
+
                 <label className="flex items-center">
                   <input
                     type="checkbox"
                     name="email_comments"
-                    checked={preferences.emailNotifications.comments}
+                    checked={preferences.emailNotifications?.comments ?? true}
                     onChange={handlePreferenceChange}
                     disabled={!isEditing || isLoading}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Yorumlar hakkında bildir</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Yorumlar hakkında bildir</span>
                 </label>
-                
+
                 <label className="flex items-center">
                   <input
                     type="checkbox"
                     name="email_newsletter"
-                    checked={preferences.emailNotifications.newsletter}
+                    checked={preferences.emailNotifications?.newsletter ?? true}
                     onChange={handlePreferenceChange}
                     disabled={!isEditing || isLoading}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Aylık bülten gönder</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Aylık bülten gönder</span>
                 </label>
               </div>
             </div>
