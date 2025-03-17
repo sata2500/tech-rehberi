@@ -1,5 +1,5 @@
 // src/pages/blog/index.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Layout from '../../components/layout/Layout';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,24 +9,53 @@ import {
   query, 
   orderBy, 
   limit, 
-  startAfter, 
+  startAfter,
   where 
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import SearchBar from '../../components/ui/SearchBar';
 import { useRouter } from 'next/router';
+import SearchBar from '../../components/ui/SearchBar';
+import { useCache } from '../../contexts/CacheContext';
 
 export default function Blog() {
   const router = useRouter();
+  const { getQuery, setQuery, isQueryStale } = useCache();
+  
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastVisible, setLastVisible] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const postsPerPage = 9;
 
-  // Blog yazılarını al
+  // İlk blog yazılarını al
   const fetchPosts = async (lastPost = null) => {
     try {
+      setLoading(true);
+      
+      // Önbellek anahtarı oluştur
+      const cacheKey = lastPost ? `posts_after_${lastPost.id}` : 'posts_first_page';
+      
+      // Önbellekte var mı kontrol et
+      const cachedPosts = getQuery(cacheKey);
+      
+      if (cachedPosts && !isQueryStale(cacheKey)) {
+        // Önbellekten al
+        if (lastPost) {
+          setPosts(prev => [...prev, ...cachedPosts]);
+        } else {
+          setPosts(cachedPosts);
+        }
+        
+        if (cachedPosts.length > 0) {
+          setLastVisible(cachedPosts[cachedPosts.length - 1]);
+        }
+        
+        setHasMore(cachedPosts.length === postsPerPage);
+        setLoading(false);
+        return;
+      }
+      
+      // Firestore'dan getir
       let postsQuery;
       
       if (lastPost) {
@@ -50,6 +79,7 @@ export default function Blog() {
       
       if (postsSnapshot.empty) {
         setHasMore(false);
+        setLoading(false);
         return;
       }
       
@@ -60,6 +90,9 @@ export default function Blog() {
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Önbelleğe kaydet
+      setQuery(cacheKey, newPosts, 5 * 60 * 1000); // 5 dakika
       
       if (lastPost) {
         setPosts(prev => [...prev, ...newPosts]);
@@ -77,14 +110,12 @@ export default function Blog() {
 
   // İlk yükleme
   useEffect(() => {
-    setLoading(true);
     fetchPosts();
   }, []);
 
   // Daha fazla yükle
   const loadMore = () => {
-    if (lastVisible) {
-      setLoading(true);
+    if (lastVisible && !loading) {
       fetchPosts(lastVisible);
     }
   };

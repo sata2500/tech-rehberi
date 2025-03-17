@@ -1,8 +1,22 @@
 // src/lib/firebase.js
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { 
+  getAuth, 
+  setPersistence, 
+  browserLocalPersistence,
+  connectAuthEmulator 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  enableIndexedDbPersistence,
+  enableMultiTabIndexedDbPersistence,
+  CACHE_SIZE_UNLIMITED,
+  connectFirestoreEmulator
+} from 'firebase/firestore';
+import { 
+  getStorage, 
+  connectStorageEmulator 
+} from 'firebase/storage';
 
 // Firebase yapılandırma bilgileri
 const firebaseConfig = {
@@ -15,32 +29,83 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Firebase'i başlat
+// Firebase instance'larını doğrudan başlat (geriye dönük uyumluluk için)
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Emülatör bağlantısı (geliştirme ortamında ve etkinleştirilmişse)
+// Auth persistence (tarayıcı ortamındaysa)
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence)
+    .catch(error => {
+      console.error('Auth persistence ayarlanırken hata:', error);
+    });
+}
+
+// Auth dil ayarını yap
+auth.useDeviceLanguage();
+
+// Offline persistence (tarayıcı ortamındaysa)
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_OFFLINE_PERSISTENCE === 'true') {
+  const offlineConfig = {
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED
+  };
+  
+  // Çoklu sekme desteği kontrol et
+  if (process.env.NEXT_PUBLIC_ENABLE_MULTI_TAB_PERSISTENCE === 'true') {
+    enableMultiTabIndexedDbPersistence(db, offlineConfig)
+      .catch(error => {
+        if (error.code === 'failed-precondition') {
+          console.warn('Birden çok sekme açık, persistence yalnızca bir sekmede etkin');
+        } else if (error.code === 'unimplemented') {
+          console.warn('Tarayıcı IndexedDB persistence desteklemiyor');
+        } else {
+          console.error('Persistence etkinleştirilirken hata:', error);
+        }
+      });
+  } else {
+    enableIndexedDbPersistence(db, offlineConfig)
+      .catch(error => {
+        if (error.code === 'failed-precondition') {
+          console.warn('Birden çok sekme açık, persistence yalnızca bir sekmede etkin');
+        } else if (error.code === 'unimplemented') {
+          console.warn('Tarayıcı IndexedDB persistence desteklemiyor');
+        } else {
+          console.error('Persistence etkinleştirilirken hata:', error);
+        }
+      });
+  }
+}
+
+// Emülatör bağlantısı (geliştirme ortamında)
 if (typeof window !== 'undefined' && 
     process.env.NODE_ENV === 'development' && 
     process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
   
-  import('firebase/auth').then(({ connectAuthEmulator }) => {
-    connectAuthEmulator(auth, 'http://localhost:9099');
-  });
-  
-  import('firebase/firestore').then(({ connectFirestoreEmulator }) => {
-    connectFirestoreEmulator(db, 'localhost', 8080);
-  });
-  
-  import('firebase/storage').then(({ connectStorageEmulator }) => {
-    connectStorageEmulator(storage, 'localhost', 9199);
-  });
+  connectAuthEmulator(auth, 'http://localhost:9099');
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectStorageEmulator(storage, 'localhost', 9199);
 }
 
-// Auth için ilave ayarlar
-auth.useDeviceLanguage();
+// Fonksiyonlar (yeni tarz erişim için)
+export function getFirebaseApp() {
+  return app;
+}
 
+export function getFirebaseAuth() {
+  return auth;
+}
+
+export function getFirebaseFirestore() {
+  return db;
+}
+
+export function getFirebaseStorage() {
+  return storage;
+}
+
+// Doğrudan nesneler (geriye dönük uyumluluk için)
 export { app, auth, db, storage };
+
 export default app;

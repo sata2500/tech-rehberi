@@ -1,10 +1,11 @@
 // src/pages/_app.js
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
-import { NotificationProvider } from '../components/common/Notification'; // Yeni eklenen
+import { NotificationProvider } from '../components/common/Notification';
+import { CacheProvider, useCache } from '../contexts/CacheContext';
+import { setGlobalCache } from '../lib/db-helpers';
 import SEO from '../components/SEO';
-import OfflineNotification from '../components/OfflineNotification';
 import '../styles/globals.css';
 
 function MyApp({ Component, pageProps }) {
@@ -43,23 +44,39 @@ function MyApp({ Component, pageProps }) {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <NotificationProvider>
-          {/* Tüm sayfalarda mevcut olacak global SEO ayarlarını uyguluyoruz */}
-          <SEO 
-            title={globalSeoConfig.title}
-            description={globalSeoConfig.description}
-            keywords={globalSeoConfig.keywords}
-            twitterSite={globalSeoConfig.twitterSite}
-            ogLocale={globalSeoConfig.ogLocale}
-            themeColor={globalSeoConfig.themeColor}
-            jsonLd={organizationSchema}
-          />
-          
-          <Component {...pageProps} />
-        </NotificationProvider>
+        <CacheProvider>
+          <CacheInitializer>
+            <NotificationProvider>
+              {/* Tüm sayfalarda mevcut olacak global SEO ayarlarını uyguluyoruz */}
+              <SEO 
+                title={globalSeoConfig.title}
+                description={globalSeoConfig.description}
+                keywords={globalSeoConfig.keywords}
+                twitterSite={globalSeoConfig.twitterSite}
+                ogLocale={globalSeoConfig.ogLocale}
+                themeColor={globalSeoConfig.themeColor}
+                jsonLd={organizationSchema}
+              />
+              
+              <Component {...pageProps} />
+            </NotificationProvider>
+          </CacheInitializer>
+        </CacheProvider>
       </ThemeProvider>
     </AuthProvider>
   );
+}
+
+// Önbellek ile DB yardımcılarını entegre et
+function CacheInitializer({ children }) {
+  const cacheActions = useCache();
+  
+  // DB yardımcıları için global önbellek referansını ayarla
+  useEffect(() => {
+    setGlobalCache(cacheActions);
+  }, [cacheActions]);
+  
+  return children;
 }
 
 export default MyApp;
