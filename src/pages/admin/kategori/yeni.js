@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../../components/layout/Layout';
-import CategoryForm from 'src/components/admin/CategoyrForm.js';
+import CategoryForm from '../../../components/admin/CategoyrForm';
 import { useAuth } from '../../../contexts/AuthContext';
 import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
