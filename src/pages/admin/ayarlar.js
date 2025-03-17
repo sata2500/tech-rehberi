@@ -1,11 +1,11 @@
-// src/pages/admin/yorumlar.js
+// src/pages/admin/ayarlar.js
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import CommentManagement from '../../components/admin/CommentManagement';
+import Settings from '../../components/admin/Settings';
 
-export default function CommentsPage() {
+export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
@@ -28,13 +28,13 @@ export default function CommentsPage() {
   }
 
   return (
-    <Layout title="Yorum Yönetimi - Admin Panel">
+    <Layout title="Ayarlar - Admin Panel">
       <div className="mb-12">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Yorum Yönetimi</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Site Ayarları</h1>
         </div>
         
-        <CommentManagement />
+        <Settings />
       </div>
     </Layout>
   );
