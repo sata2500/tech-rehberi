@@ -443,3 +443,87 @@ import {
       };
     }
   };
+
+/**
+ * Kullanıcı dokümanını oluşturur veya günceller (yoksa)
+ * Bu fonksiyon, kullanıcı giriş yaptığında çağrılmalıdır
+ * @param {string} userId - Kullanıcı kimliği
+ * @param {object} userData - Kullanıcı verileri (opsiyonel)
+ */
+export const ensureUserDocument = async (userId, userData = {}) => {
+  try {
+    // Kullanıcı dokümanını kontrol et
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      // Kullanıcı dokümanı yoksa oluştur
+      const timestamp = Timestamp.now();
+      
+      await setDoc(userRef, {
+        id: userId,
+        uid: userId, // Geriye uyumluluk için
+        displayName: userData.displayName || '',
+        email: userData.email || '',
+        photoURL: userData.photoURL || '',
+        role: userData.role || 'admin', // Varsayılan olarak admin (test aşamasında)
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        lastLogin: timestamp, // Geriye uyumluluk için
+        preferences: {
+          theme: 'light',
+          emailNotifications: {
+            newPosts: true,
+            comments: true,
+            newsletter: true
+          }
+        },
+        bookmarkedPosts: [],
+        likedPosts: []
+      });
+      
+      console.log('Kullanıcı dokümanı oluşturuldu:', userId);
+      return { success: true, message: 'Kullanıcı dokümanı oluşturuldu' };
+    } else {
+      // Kullanıcı dokümanı var, rolünü kontrol et
+      const existingData = userDoc.data();
+      
+      const updates = { 
+        lastLogin: Timestamp.now()
+      };
+      
+      // Role alanı yoksa veya boşsa ekle
+      if (!existingData.role) {
+        updates.role = 'admin'; // Test aşamasında admin olarak ayarla
+        console.log('Kullanıcı rolü eklendi:', userId);
+      }
+      
+      // preferences alanı yoksa ekle
+      if (!existingData.preferences) {
+        updates.preferences = {
+          theme: 'light',
+          emailNotifications: {
+            newPosts: true,
+            comments: true,
+            newsletter: true
+          }
+        };
+      }
+      
+      // Güncellemeler varsa uygula
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(userRef, updates);
+        console.log('Kullanıcı dokümanı güncellendi:', userId);
+      }
+      
+      return { 
+        success: true, 
+        message: 'Kullanıcı dokümanı zaten mevcut', 
+        role: existingData.role || 'admin' 
+      };
+    }
+  } catch (error) {
+    console.error('Kullanıcı dokümanı oluşturulurken hata:', error);
+    return { success: false, error: error.message };
+  }
+};

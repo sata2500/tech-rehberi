@@ -1,10 +1,10 @@
 // src/lib/firebase.js
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
-// Firebase yapılandırma bilgileri - sadece client-side'da güvenli olan bilgiler
+// Firebase yapılandırma bilgileri
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -15,85 +15,32 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Firebase'i lazy initialization ile başlat
-let firebaseApp;
-let firebaseAuth;
-let firebaseDb;
-let firebaseStorage;
+// Firebase'i başlat
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
-/**
- * Firebase uygulamasını başlatır
- */
-export function initializeFirebase() {
-  if (!firebaseApp) {
-    if (!getApps().length) {
-      firebaseApp = initializeApp(firebaseConfig);
-    } else {
-      firebaseApp = getApps()[0];
-    }
-  }
-  return firebaseApp;
-}
-
-/**
- * Firebase Authentication hizmetini alır
- */
-export function getFirebaseAuth() {
-  if (!firebaseAuth) {
-    const app = initializeFirebase();
-    firebaseAuth = getAuth(app);
-    
-    // Geliştirme ortamında emülatör bağlantısı (isteğe bağlı)
-    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
-      connectAuthEmulator(firebaseAuth, 'http://localhost:9099');
-    }
-
-    // Authentication için ilave güvenlik ayarları
-    firebaseAuth.useDeviceLanguage();
-  }
+// Emülatör bağlantısı (geliştirme ortamında ve etkinleştirilmişse)
+if (typeof window !== 'undefined' && 
+    process.env.NODE_ENV === 'development' && 
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
   
-  return firebaseAuth;
-}
-
-/**
- * Firebase Firestore hizmetini alır
- */
-export function getFirebaseFirestore() {
-  if (!firebaseDb) {
-    const app = initializeFirebase();
-    firebaseDb = getFirestore(app);
-    
-    // Geliştirme ortamında emülatör bağlantısı (isteğe bağlı)
-    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
-      connectFirestoreEmulator(firebaseDb, 'localhost', 8080);
-    }
-  }
+  import('firebase/auth').then(({ connectAuthEmulator }) => {
+    connectAuthEmulator(auth, 'http://localhost:9099');
+  });
   
-  return firebaseDb;
-}
-
-/**
- * Firebase Storage hizmetini alır
- */
-export function getFirebaseStorage() {
-  if (!firebaseStorage) {
-    const app = initializeFirebase();
-    firebaseStorage = getStorage(app);
-    
-    // Geliştirme ortamında emülatör bağlantısı (isteğe bağlı)
-    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
-      connectStorageEmulator(firebaseStorage, 'localhost', 9199);
-    }
-  }
+  import('firebase/firestore').then(({ connectFirestoreEmulator }) => {
+    connectFirestoreEmulator(db, 'localhost', 8080);
+  });
   
-  return firebaseStorage;
+  import('firebase/storage').then(({ connectStorageEmulator }) => {
+    connectStorageEmulator(storage, 'localhost', 9199);
+  });
 }
 
-// Geriye uyumluluk için eski ihraç edilenleri koruyoruz,
-// ancak yeni kod lazy yükleyicileri kullanmalı
-export const app = initializeFirebase();
-export const auth = getFirebaseAuth();
-export const db = getFirebaseFirestore();
-export const storage = getFirebaseStorage();
+// Auth için ilave ayarlar
+auth.useDeviceLanguage();
 
+export { app, auth, db, storage };
 export default app;
